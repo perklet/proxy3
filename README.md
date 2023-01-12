@@ -1,7 +1,6 @@
-# proxy2
+# proxy3
 
-HTTP/HTTPS proxy in a single python script
-
+Man-in-the-middle http/https proxy in a single python script
 
 ## Features
 
@@ -11,43 +10,39 @@ HTTP/HTTPS proxy in a single python script
 * support HTTP/1.1 Persistent Connection
 * support dynamic certificate generation for HTTPS intercept
 
-This script works on Python 2.7.
+This script works on Python 3.10+.
 You need to install OpenSSL to intercept HTTPS connections.
 
 
 ## Usage
 
-Just run as a script:
+Just clone and run as a script:
 
-```
-$ python proxy2.py
-```
+    $ python proxy3.py
 
-Above command runs the proxy on localhost:8080.
-Verify it works by typing the below command on another terminal of the same host.
+Or, install using pip:
 
-```
-$ http_proxy=localhost:8080 curl http://www.example.com/
-```
+    $ pip install proxy3
+    $ proxy3
 
-proxy2 is made for debugging/testing, so it only accepts connections from localhost.
+Above command runs the proxy on localhost:8887. Verify it works by typing the below command on another terminal of the same host.
+
+    $ http_proxy=localhost:8887 curl http://www.example.com/
+
+proxy3 is made for debugging/testing, so it only accepts connections from localhost.
 
 To use another port, specify the port number as the first argument.
 
-```
-$ python proxy2.py 3128
-```
+    $ python proxy3.py --port 3128
 
 
 ## Enable HTTPS intercept
 
 To intercept HTTPS connections, generate private keys and a private CA certificate:
 
-```
-$ ./setup_https_intercept.sh
-```
+    $ ./setup_https_intercept.sh
 
-Through the proxy, you can access http://proxy2.test/ and install the CA certificate in the browsers.
+Through the proxy, you can access http://proxy3.test/ and install the CA certificate in the browsers.
 
 
 ## Customization
