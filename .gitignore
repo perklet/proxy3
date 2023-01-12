@@ -1,2 +1,4 @@
 *.pem
 certs/
+__pycache__/
+proxy3.egg-info/

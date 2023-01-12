@@ -15,6 +15,7 @@ import time
 import urllib.parse
 import zlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.client import HTTPMessage
 from socketserver import ThreadingMixIn
 from subprocess import PIPE, Popen
 
@@ -278,7 +279,9 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
     do_DELETE = do_GET
     do_OPTIONS = do_GET
 
-    def filter_headers(self, headers: dict[str, str]) -> dict[str, str]:
+    def filter_headers(
+        self, headers: http.client.HTTPMessage
+    ) -> http.client.HTTPMessage:
         # http://tools.ietf.org/html/rfc2616#section-13.5.1
         hop_by_hop = (
             "connection",
@@ -446,80 +449,79 @@ def print_info(req, req_body, res, res_body):
             print(with_color(GREEN, "==== RESPONSE BODY ====\n%s\n" % res_body_text))
 
 
-if __name__ == "__main__":
-    HandlerClass = ProxyRequestHandler
-    ServerClass = ThreadingHTTPServer
-    protocol = "HTTP/1.1"
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-H", "--host", default="localhost", help="Host to bind, default localhost"
-    )
-    parser.add_argument(
-        "-p", "--port", type=int, default="6666", help="Port to bind, default 6666"
-    )
-    parser.add_argument("--timeout", type=int, default=5, help="Timeout, default 5")
-    parser.add_argument("--ca-key", default="./ca-key.pem", help="CA key file")
-    parser.add_argument("--ca-cert", default="./ca-cert.pem", help="CA cert file")
-    parser.add_argument(
-        "--ca-signing-key", default="./ca-signing-key.pem", help="CA cert key file"
-    )
-    parser.add_argument("--cert-dir", default="./certs", help="Site certs files")
-    parser.add_argument("--request-handler", help="Request handler function")
-    parser.add_argument("--response-handler", help="Response handler function")
-    parser.add_argument("--save-handler", help="Save handler function")
-    parser.add_argument(
-        "--make-certs", action="store_true", help="Create https intercept certs"
-    )
-    args = parser.parse_args()
+def main():
+    """place holder, no use."""
 
-    if args.make_certs:
-        Popen(["openssl", "genrsa", "-out", args.ca_key, "2048"]).communicate()
-        Popen(
-            [
-                "openssl",
-                "req",
-                "-new",
-                "-x509",
-                "-days",
-                "3650",
-                "-key",
-                args.ca_key,
-                "-out",
-                args.ca_cert,
-                "-subj",
-                "/CN=proxy3 CA",
-            ]
-        ).communicate()
-        Popen(["openssl", "genrsa", "-out", args.ca_signing_key, "2048"]).communicate()
-        os.makedirs(args.cert_dir, exist_ok=True)
-        for old_cert in glob.glob(os.path.join(args.cert_dir, "*.pem")):
-            os.remove(old_cert)
 
-        sys.exit(0)
+HandlerClass = ProxyRequestHandler
+ServerClass = ThreadingHTTPServer
+protocol = "HTTP/1.1"
+parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument( "-H", "--host", default="localhost", help="Host to bind")
+parser.add_argument( "-p", "--port", type=int, default="6666", help="Port to bind")
+parser.add_argument("--timeout", type=int, default=5, help="Timeout")
+parser.add_argument("--ca-key", default="./ca-key.pem", help="CA key file")
+parser.add_argument("--ca-cert", default="./ca-cert.pem", help="CA cert file")
+parser.add_argument(
+    "--ca-signing-key", default="./ca-signing-key.pem", help="CA cert key file"
+)
+parser.add_argument("--cert-dir", default="./certs", help="Site certs files")
+parser.add_argument("--request-handler", help="Request handler function")
+parser.add_argument("--response-handler", help="Response handler function")
+parser.add_argument("--save-handler", help="Save handler function")
+parser.add_argument(
+    "--make-certs", action="store_true", help="Create https intercept certs"
+)
+args = parser.parse_args()
 
-    server_address = (args.host, args.port)
-    if args.request_handler:
-        module, func = args.request_handler.split(":")
-        m = importlib.import_module(module)
-        request_handler = getattr(m, func)
-    else:
-        request_handler = None
-    if args.response_handler:
-        module, func = args.response_handler.split(":")
-        m = importlib.import_module(module)
-        response_handler = getattr(m, func)
-    else:
-        response_handler = None
-    if args.save_handler:
-        module, func = args.save_handler.split(":")
-        m = importlib.import_module(module)
-        save_handler = getattr(m, func)
-    else:
-        save_handler = print_info
+if args.make_certs:
+    Popen(["openssl", "genrsa", "-out", args.ca_key, "2048"]).communicate()
+    Popen(
+        [
+            "openssl",
+            "req",
+            "-new",
+            "-x509",
+            "-days",
+            "3650",
+            "-key",
+            args.ca_key,
+            "-out",
+            args.ca_cert,
+            "-subj",
+            "/CN=proxy3 CA",
+        ]
+    ).communicate()
+    Popen(["openssl", "genrsa", "-out", args.ca_signing_key, "2048"]).communicate()
+    os.makedirs(args.cert_dir, exist_ok=True)
+    for old_cert in glob.glob(os.path.join(args.cert_dir, "*.pem")):
+        os.remove(old_cert)
 
-    HandlerClass.protocol_version = protocol
-    httpd = ServerClass(server_address, HandlerClass)
+    sys.exit(0)
 
-    sa = httpd.socket.getsockname()
-    print("Serving HTTP Proxy on", sa[0], "port", sa[1], "...")
-    httpd.serve_forever()
+server_address = (args.host, args.port)
+if args.request_handler:
+    module, func = args.request_handler.split(":")
+    m = importlib.import_module(module)
+    request_handler = getattr(m, func)
+else:
+    request_handler = None
+if args.response_handler:
+    module, func = args.response_handler.split(":")
+    m = importlib.import_module(module)
+    response_handler = getattr(m, func)
+else:
+    response_handler = None
+if args.save_handler:
+    module, func = args.save_handler.split(":")
+    m = importlib.import_module(module)
+    save_handler = getattr(m, func)
+else:
+    save_handler = print_info
+
+HandlerClass.protocol_version = protocol
+httpd = ServerClass(server_address, HandlerClass)
+
+sa = httpd.socket.getsockname()
+print("Serving HTTP Proxy on", sa[0], "port", sa[1], "...")
+httpd.serve_forever()

@@ -11,7 +11,7 @@ Man-in-the-middle http/https proxy in a single python script
 * support dynamic certificate generation for HTTPS intercept
 
 This script works on Python 3.10+.
-You need to install OpenSSL to intercept HTTPS connections.
+You need to install `openssl` to intercept HTTPS connections.
 
 
 ## Usage
@@ -25,15 +25,15 @@ Or, install using pip:
     $ pip install proxy3
     $ proxy3
 
-Above command runs the proxy on localhost:8887. Verify it works by typing the below command on another terminal of the same host.
+Above command runs the proxy on localhost:6666. Verify it works by typing the below
+command in another terminal of the same host.
 
-    $ http_proxy=localhost:8887 curl http://www.example.com/
+    # test http proxy
+    $ http_proxy=localhost:6666 curl http://www.example.com/
 
-proxy3 is made for debugging/testing, so it only accepts connections from localhost.
+To bind to another host or port:
 
-To use another port, specify the port number as the first argument.
-
-    $ python proxy3.py --port 3128
+    $ python proxy3.py --host 0.0.0.0 --port 3128
 
 
 ## Enable HTTPS intercept
@@ -41,8 +41,38 @@ To use another port, specify the port number as the first argument.
 To intercept HTTPS connections, generate private keys and a private CA certificate:
 
     $ python proxy3.py --make-certs
+    $ https_proxy=localhost:8887 curl https://www.example.com/
 
 Through the proxy, you can access http://proxy3.test/ and install the CA certificate in the browsers.
+
+
+## Detailed Usage
+
+    $ python proxy3.py --help
+
+    usage: proxy3.py [-h] [-H HOST] [-p PORT] [--timeout TIMEOUT] [--ca-key CA_KEY]
+                     [--ca-cert CA_CERT] [--ca-signing-key CA_SIGNING_KEY]
+                     [--cert-dir CERT_DIR] [--request-handler REQUEST_HANDLER]
+                     [--response-handler RESPONSE_HANDLER] [--save-handler SAVE_HANDLER]
+                     [--make-certs]
+
+    options:
+      -h, --help            show this help message and exit
+      -H HOST, --host HOST  Host to bind, default localhost
+      -p PORT, --port PORT  Port to bind, default 6666
+      --timeout TIMEOUT     Timeout, default 5
+      --ca-key CA_KEY       CA key file
+      --ca-cert CA_CERT     CA cert file
+      --ca-signing-key CA_SIGNING_KEY
+                            CA cert key file
+      --cert-dir CERT_DIR   Site certs files
+      --request-handler REQUEST_HANDLER
+                            Request handler function
+      --response-handler RESPONSE_HANDLER
+                            Response handler function
+      --save-handler SAVE_HANDLER
+                            Save handler function
+      --make-certs          Create https intercept certs
 
 
 ## Customization
