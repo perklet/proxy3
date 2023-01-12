@@ -1,6 +1,6 @@
 import argparse
+import glob
 import gzip
-import html
 import http.client
 import importlib
 import json
@@ -17,7 +17,6 @@ import zlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from subprocess import PIPE, Popen
-
 
 RED = 31
 GREEN = 32
@@ -75,7 +74,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
 
     def connect_intercept(self):
         hostname = self.path.split(":")[0]
-        certpath = os.path.join(args.cert_dir, hostname)
+        certpath = os.path.join(args.cert_dir, hostname + ".pem")
 
         with self.lock:
             if not os.path.isfile(certpath):
@@ -433,9 +432,13 @@ def print_info(req, req_body, res, res_body):
             except ValueError:
                 res_body_text = res_body
         elif content_type.startswith("text/html"):
-            m = re.search(br"<title[^>]*>\s*([^<]+?)\s*</title>", res_body, re.I)
+            m = re.search(rb"<title[^>]*>\s*([^<]+?)\s*</title>", res_body, re.I)
             if m:
-                print(with_color(GREEN, "==== HTML TITLE ====\n%s\n" % m.group(1).decode()))
+                print(
+                    with_color(
+                        GREEN, "==== HTML TITLE ====\n%s\n" % m.group(1).decode()
+                    )
+                )
         elif content_type.startswith("text/") and len(res_body) < 1024:
             res_body_text = res_body
 
@@ -448,19 +451,51 @@ if __name__ == "__main__":
     ServerClass = ThreadingHTTPServer
     protocol = "HTTP/1.1"
     parser = argparse.ArgumentParser()
-    parser.add_argument("-H", "--host", default="localhost", help="Host to bind")
-    parser.add_argument("-p", "--port", type=int, default="6666", help="Port to bind")
-    parser.add_argument("--timeout", type=int, default=5, help="Timeout")
+    parser.add_argument(
+        "-H", "--host", default="localhost", help="Host to bind, default localhost"
+    )
+    parser.add_argument(
+        "-p", "--port", type=int, default="6666", help="Port to bind, default 6666"
+    )
+    parser.add_argument("--timeout", type=int, default=5, help="Timeout, default 5")
     parser.add_argument("--ca-key", default="./ca-key.pem", help="CA key file")
     parser.add_argument("--ca-cert", default="./ca-cert.pem", help="CA cert file")
     parser.add_argument(
-        "--ca-signing-key", default="./ca-cert-key.pem", help="CA cert key file"
+        "--ca-signing-key", default="./ca-signing-key.pem", help="CA cert key file"
     )
     parser.add_argument("--cert-dir", default="./certs", help="Site certs files")
     parser.add_argument("--request-handler", help="Request handler function")
     parser.add_argument("--response-handler", help="Response handler function")
     parser.add_argument("--save-handler", help="Save handler function")
+    parser.add_argument(
+        "--make-certs", action="store_true", help="Create https intercept certs"
+    )
     args = parser.parse_args()
+
+    if args.make_certs:
+        Popen(["openssl", "genrsa", "-out", args.ca_key, "2048"]).communicate()
+        Popen(
+            [
+                "openssl",
+                "req",
+                "-new",
+                "-x509",
+                "-days",
+                "3650",
+                "-key",
+                args.ca_key,
+                "-out",
+                args.ca_cert,
+                "-subj",
+                "/CN=proxy3 CA",
+            ]
+        ).communicate()
+        Popen(["openssl", "genrsa", "-out", args.ca_signing_key, "2048"]).communicate()
+        os.makedirs(args.cert_dir, exist_ok=True)
+        for old_cert in glob.glob(os.path.join(args.cert_dir, "*.pem")):
+            os.remove(old_cert)
+
+        sys.exit(0)
 
     server_address = (args.host, args.port)
     if args.request_handler:

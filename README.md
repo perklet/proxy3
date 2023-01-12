@@ -40,7 +40,7 @@ To use another port, specify the port number as the first argument.
 
 To intercept HTTPS connections, generate private keys and a private CA certificate:
 
-    $ ./setup_https_intercept.sh
+    $ python proxy3.py --make-certs
 
 Through the proxy, you can access http://proxy3.test/ and install the CA certificate in the browsers.
 
