@@ -6,7 +6,7 @@ def request_handler(
     req: BaseHTTPRequestHandler,
     req_body: str,
 ) -> str | bool | None:
-    print("Request url: ", req.address_string())
+    print("Request handler invoked, the url: ", req.address_string())
     ...
 
 
@@ -16,7 +16,7 @@ def response_handler(
     res: HTTPResponse,
     res_body: str,
 ) -> str | bool | None:
-    print("Response code: ", res.status)
+    print("Response handler invoked, status code: ", res.status)
     ...
 
 

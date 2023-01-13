@@ -2,6 +2,7 @@ import argparse
 import glob
 import gzip
 import http.client
+import http.server
 import importlib
 import json
 import os
@@ -443,11 +444,8 @@ def main():
     """place holder, no action, but do not delete."""
 
 
-HandlerClass = ProxyRequestHandler
-ServerClass = ThreadingHTTPServer
-protocol = "HTTP/1.1"
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument("-H", "--host", default="localhost", help="Host to bind")
+parser.add_argument("-b", "--bind", default="localhost", help="Host to bind")
 parser.add_argument("-p", "--port", type=int, default=7777, help="Port to bind")
 parser.add_argument("--timeout", type=int, default=5, help="Timeout")
 parser.add_argument("--ca-key", default="./ca-key.pem", help="CA key file")
@@ -456,11 +454,25 @@ parser.add_argument(
     "--ca-signing-key", default="./ca-signing-key.pem", help="CA cert key file"
 )
 parser.add_argument("--cert-dir", default="./certs", help="Site certs files")
-parser.add_argument("--request-handler", help="Request handler function")
-parser.add_argument("--response-handler", help="Response handler function")
-parser.add_argument("--save-handler", help="Save handler function, use 'off' to turn off")
+parser.add_argument(
+    "--request-handler",
+    help="Request handler function, example: foo.bar:handle_request",
+)
+parser.add_argument(
+    "--response-handler",
+    help="Response handler function, example: foo.bar:handle_response",
+)
+parser.add_argument(
+    "--save-handler",
+    help="Save handler function, use 'off' to turn off, example: foo.bar:handle_save",
+)
 parser.add_argument(
     "--make-certs", action="store_true", help="Create https intercept certs"
+)
+parser.add_argument(
+    "--make-example",
+    action="store_true",
+    help="Create an intercept handlers example python file",
 )
 args = parser.parse_args()
 
@@ -486,10 +498,15 @@ if args.make_certs:
     os.makedirs(args.cert_dir, exist_ok=True)
     for old_cert in glob.glob(os.path.join(args.cert_dir, "*.pem")):
         os.remove(old_cert)
-
     sys.exit(0)
 
-server_address = (args.host, args.port)
+if args.make_example:
+    import shutil
+
+    example_file = os.path.join(os.path.dirname(__file__), "examples/example.py")
+    shutil.copy(example_file, "proxy3_handlers_example.py")
+    sys.exit(0)
+
 if args.request_handler:
     module, func = args.request_handler.split(":")
     m = importlib.import_module(module)
@@ -512,9 +529,11 @@ if args.save_handler:
 else:
     save_handler = print_info
 
-HandlerClass.protocol_version = protocol
-httpd = ServerClass(server_address, HandlerClass)
-
-sa = httpd.socket.getsockname()
-print("Serving HTTP Proxy on", sa[0], "port", sa[1], "...")
-httpd.serve_forever()
+protocol = "HTTP/1.1"
+http.server.test(
+    HandlerClass=ProxyRequestHandler,
+    ServerClass=ThreadingHTTPServer,
+    protocol=protocol,
+    port=args.port,
+    bind=args.bind,
+)
