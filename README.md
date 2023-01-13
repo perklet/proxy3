@@ -25,7 +25,7 @@ Or, install using pip:
     $ pip install proxy3
     $ proxy3
 
-Above command runs the proxy on localhost:6666. Verify it works by typing the below
+Above command runs the proxy on localhost:7777. Verify it works by typing the below
 command in another terminal of the same host.
 
     # test http proxy
@@ -50,30 +50,27 @@ Through the proxy, you can access http://proxy3.test/ and install the CA certifi
 
     $ python proxy3.py --help
 
-    usage: proxy3.py [-h] [-H HOST] [-p PORT] [--timeout TIMEOUT] [--ca-key CA_KEY]
-                     [--ca-cert CA_CERT] [--ca-signing-key CA_SIGNING_KEY]
-                     [--cert-dir CERT_DIR] [--request-handler REQUEST_HANDLER]
-                     [--response-handler RESPONSE_HANDLER] [--save-handler SAVE_HANDLER]
-                     [--make-certs]
+    usage: proxy3.py [-h] [-H HOST] [-p PORT] [--timeout TIMEOUT] [--ca-key CA_KEY] [--c
+    a-cert CA_CERT] [--ca-signing-key CA_SIGNING_KEY] [--cert-dir CERT_DIR] [--request-h
+    andler REQUEST_HANDLER] [--response-handler RESPONSE_HANDLER] [--save-handler SAVE_H
+    ANDLER] [--make-certs]
 
     options:
       -h, --help            show this help message and exit
-      -H HOST, --host HOST  Host to bind, default localhost
-      -p PORT, --port PORT  Port to bind, default 6666
-      --timeout TIMEOUT     Timeout, default 5
-      --ca-key CA_KEY       CA key file
-      --ca-cert CA_CERT     CA cert file
+      -H HOST, --host HOST  Host to bind (default: localhost)
+      -p PORT, --port PORT  Port to bind (default: 7777)
+      --timeout TIMEOUT     Timeout (default: 5)
+      --ca-key CA_KEY       CA key file (default: ./ca-key.pem)
+      --ca-cert CA_CERT     CA cert file (default: ./ca-cert.pem)
       --ca-signing-key CA_SIGNING_KEY
-                            CA cert key file
-      --cert-dir CERT_DIR   Site certs files
+                            CA cert key file (default: ./ca-signing-key.pem)
+      --cert-dir CERT_DIR   Site certs files (default: ./certs)
       --request-handler REQUEST_HANDLER
-                            Request handler function
+                            Request handler function (default: None)
       --response-handler RESPONSE_HANDLER
-                            Response handler function
+                            Response handler function (default: None)
       --save-handler SAVE_HANDLER
-                            Save handler function
-      --make-certs          Create https intercept certs
-
+                            Save handler function, use 'off' to turn off (default: None)
 
 ## Customization
 
