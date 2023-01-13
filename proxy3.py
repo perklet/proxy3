@@ -65,7 +65,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         if (
             os.path.isfile(args.ca_key)
             and os.path.isfile(args.ca_cert)
-            and os.path.isfile(args.ca_signing_key)
+            and os.path.isfile(args.cert_key)
             and os.path.isdir(args.cert_dir)
         ):
             print("HTTPS mitm enabled, Intercepting...")
@@ -77,29 +77,43 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
     def connect_intercept(self):
         hostname = self.path.split(":")[0]
         certpath = os.path.join(args.cert_dir, hostname + ".pem")
+        confpath = os.path.join(args.cert_dir, hostname + ".conf")
 
         with self.lock:
+            # stupid requirements from Apple: https://support.apple.com/en-us/HT210176
             if not os.path.isfile(certpath):
+                if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", hostname):
+                    category = "IP"
+                else:
+                    category = "DNS"
+                with open(confpath, "w") as f:
+                    f.write("subjectAltName=%s:%s\nextendedKeyUsage=serverAuth\n" %(category, hostname))
                 epoch = "%d" % (time.time() * 1000)
+                # CSR
                 p1 = Popen(
                     [
                         "openssl",
                         "req",
+                        "-sha256",
                         "-new",
                         "-key",
-                        args.ca_key,
+                        args.cert_key,
                         "-subj",
                         "/CN=%s" % hostname,
+                        "-addext",
+                        "subjectAltName=DNS:%s" % hostname,
                     ],
                     stdout=PIPE,
                 )
+                # Sign
                 p2 = Popen(
                     [
                         "openssl",
                         "x509",
                         "-req",
+                        "-sha256",
                         "-days",
-                        "3650",
+                        "365",
                         "-CA",
                         args.ca_cert,
                         "-CAkey",
@@ -108,6 +122,8 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
                         epoch,
                         "-out",
                         certpath,
+                        "-extfile",
+                        confpath,
                     ],
                     stdin=p1.stdout,
                     stderr=PIPE,
@@ -119,8 +135,13 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
 
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.verify_mode = ssl.CERT_NONE
-        context.load_cert_chain(certpath, args.ca_key)
-        self.connection = context.wrap_socket(self.connection, server_side=True)
+        # print(args.cert_key)
+        context.load_cert_chain(certpath, args.cert_key)
+        try:
+            self.connection = context.wrap_socket(self.connection, server_side=True)
+        except ssl.SSLEOFError:
+            print("Handshake refused by client, maybe SSL pinning?")
+            return
         self.rfile = self.connection.makefile("rb", self.rbufsize)
         self.wfile = self.connection.makefile("wb", self.wbufsize)
 
@@ -404,7 +425,6 @@ def print_info(req, req_body, res, res_body):
 
     cookies = res.headers.get("Set-Cookie")
     if cookies:
-        cookies = "\n".join(cookies)
         print(with_color(RED, "==== SET-COOKIE ====\n%s\n" % cookies))
 
     if res_body is not None:
@@ -450,9 +470,7 @@ parser.add_argument("-p", "--port", type=int, default=7777, help="Port to bind")
 parser.add_argument("--timeout", type=int, default=5, help="Timeout")
 parser.add_argument("--ca-key", default="./ca-key.pem", help="CA key file")
 parser.add_argument("--ca-cert", default="./ca-cert.pem", help="CA cert file")
-parser.add_argument(
-    "--ca-signing-key", default="./ca-signing-key.pem", help="CA cert key file"
-)
+parser.add_argument("--cert-key", default="./cert-key.pem", help="site cert key file")
 parser.add_argument("--cert-dir", default="./certs", help="Site certs files")
 parser.add_argument(
     "--request-handler",
@@ -488,13 +506,14 @@ if args.make_certs:
             "3650",
             "-key",
             args.ca_key,
+            "-sha256",
             "-out",
             args.ca_cert,
             "-subj",
-            "/CN=proxy3 CA",
+            "/CN=Proxy3 CA",
         ]
     ).communicate()
-    Popen(["openssl", "genrsa", "-out", args.ca_signing_key, "2048"]).communicate()
+    Popen(["openssl", "genrsa", "-out", args.cert_key, "2048"]).communicate()
     os.makedirs(args.cert_dir, exist_ok=True)
     for old_cert in glob.glob(os.path.join(args.cert_dir, "*.pem")):
         os.remove(old_cert)
