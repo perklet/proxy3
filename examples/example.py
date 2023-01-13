@@ -1,12 +1,29 @@
+from http.client import HTTPResponse
+from http.server import BaseHTTPRequestHandler
 
 
-def request_handler(req, req_body: bytes) -> str | bool:
+def request_handler(
+    req: BaseHTTPRequestHandler,
+    req_body: str,
+) -> str | bool | None:
+    print("Request url: ", req.address_string())
     ...
 
 
-def response_handler(req, req_body, res, res_body) -> str | bool:
+def response_handler(
+    req: BaseHTTPRequestHandler,
+    req_body: str,
+    res: HTTPResponse,
+    res_body: str,
+) -> str | bool | None:
+    print("Response code: ", res.status)
     ...
 
 
-def save_handler(req, req_body, res, res_body):
+def save_handler(
+    req: BaseHTTPRequestHandler,
+    req_body: str,
+    res: HTTPResponse,
+    res_body: str,
+):
     ...

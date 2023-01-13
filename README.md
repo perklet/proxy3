@@ -29,7 +29,7 @@ Above command runs the proxy on localhost:6666. Verify it works by typing the be
 command in another terminal of the same host.
 
     # test http proxy
-    $ http_proxy=localhost:6666 curl http://www.example.com/
+    $ http_proxy=localhost:7777 curl http://www.example.com/
 
 To bind to another host or port:
 
@@ -41,7 +41,7 @@ To bind to another host or port:
 To intercept HTTPS connections, generate private keys and a private CA certificate:
 
     $ python proxy3.py --make-certs
-    $ https_proxy=localhost:8887 curl https://www.example.com/
+    $ https_proxy=localhost:7777 curl https://www.example.com/
 
 Through the proxy, you can access http://proxy3.test/ and install the CA certificate in the browsers.
 

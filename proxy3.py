@@ -14,8 +14,8 @@ import threading
 import time
 import urllib.parse
 import zlib
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from http.client import HTTPMessage
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from subprocess import PIPE, Popen
 
@@ -67,10 +67,10 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             and os.path.isfile(args.ca_signing_key)
             and os.path.isdir(args.cert_dir)
         ):
-            print("Intercepting...")
+            print("HTTPS mitm enabled, Intercepting...")
             self.connect_intercept()
         else:
-            print("NOT Intercepting...")
+            print("HTTPS relay only, NOT Intercepting...")
             self.connect_relay()
 
     def connect_intercept(self):
@@ -116,9 +116,10 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         self.send_response(200, "Connection Established")
         self.end_headers()
 
-        self.connection = ssl.wrap_socket(
-            self.connection, keyfile=args.ca_key, certfile=certpath, server_side=True
-        )
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.verify_mode = ssl.CERT_NONE
+        context.load_cert_chain(certpath, args.ca_key)
+        self.connection = context.wrap_socket(self.connection, server_side=True)
         self.rfile = self.connection.makefile("rb", self.rbufsize)
         self.wfile = self.connection.makefile("wb", self.wbufsize)
 
@@ -160,7 +161,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
 
         req = self
         content_length = int(req.headers.get("Content-Length", 0))
-        req_body = self.rfile.read(content_length) if content_length else None
+        req_body = self.rfile.read(content_length) if content_length else b""
 
         if req.path[0] == "/":
             if isinstance(self.connection, ssl.SSLSocket):
@@ -169,30 +170,27 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
                 req.path = "http://%s%s" % (req.headers["Host"], req.path)
 
         if request_handler is not None:
-            req_body_modified = request_handler(req, req_body)
-        else:
-            req_body_modified = req_body
-        if req_body_modified is False:
-            self.send_error(403)
-            return
-        elif req_body_modified is not None:
-            req_body = req_body_modified
-            req.headers["Content-length"] = str(len(req_body))
+            # convert to str and back to bytes
+            req_body_modified = request_handler(req, req_body.decode())
+            if req_body_modified is False:
+                self.send_error(403)
+                return
+            if req_body_modified is not None:
+                req_body = req_body_modified.encode()
+                req.headers["Content-Length"] = str(len(req_body))
 
         u = urllib.parse.urlsplit(req.path)
-        scheme, netloc, path = (
-            u.scheme,
-            u.netloc,
-            (u.path + "?" + u.query if u.query else u.path),
-        )
+        scheme = u.scheme
+        netloc = u.netloc
+        path = u.path + "?" + u.query if u.query else u.path
         assert scheme in ("http", "https")
         if netloc:
             req.headers["Host"] = netloc
-        setattr(req, "headers", self.filter_headers(req.headers))
+        req.headers = self.filter_headers(req.headers)  # type: ignore
 
+        origin = (scheme, netloc)
         try:
-            origin = (scheme, netloc)
-            if not origin in self.tls.conns:
+            if origin not in self.tls.conns:
                 if scheme == "https":
                     self.tls.conns[origin] = http.client.HTTPSConnection(
                         netloc, timeout=self.timeout
@@ -205,17 +203,12 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             conn.request(self.command, path, req_body, dict(req.headers))
             res = conn.getresponse()
 
-            version_table = {10: "HTTP/1.0", 11: "HTTP/1.1"}
-            setattr(res, "headers", res.msg)
-            setattr(res, "response_version", version_table[res.version])
-
             # support streaming
-            if not "Content-Length" in res.headers and "no-store" in res.headers.get(
-                "Cache-Control", ""
-            ):
+            cache_control = res.headers.get("Cache-Control", "")
+            if "Content-Length" not in res.headers and "no-store" in cache_control:
                 if response_handler is not None:
                     response_handler(req, req_body, res, "")
-                setattr(res, "headers", self.filter_headers(res.headers))
+                res.headers = self.filter_headers(res.headers)
                 self.relay_streaming(res)
                 if save_handler is not None:
                     with self.lock:
@@ -229,22 +222,18 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
             self.send_error(502)
             return
 
-        content_encoding = res.headers.get("Content-Encoding", "identity")
-        res_body_plain = self.decode_content_body(res_body, content_encoding)
-
         if response_handler is not None:
+            content_encoding = res.headers.get("Content-Encoding", "identity")
+            res_body_plain = self.decode_content_body(res_body, content_encoding)
             res_body_modified = response_handler(req, req_body, res, res_body_plain)
-        else:
-            res_body_modified = res_body
-        if res_body_modified is False:
-            self.send_error(403)
-            return
-        elif res_body_modified is not None:
-            res_body_plain = res_body_modified
-            res_body = self.encode_content_body(res_body_plain, content_encoding)
-            res.headers["Content-Length"] = str(len(res_body))
+            if res_body_modified is False:
+                self.send_error(403)
+                return
+            if res_body_modified is not None:
+                res_body = self.encode_content_body(res_body_modified, content_encoding)
+                res.headers["Content-Length"] = str(len(res_body))
 
-        setattr(res, "headers", self.filter_headers(res.headers))
+        res.headers = self.filter_headers(res.headers)
 
         self.send_response_only(res.status, res.reason)
         for k, v in res.headers.items():
@@ -254,6 +243,8 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         self.wfile.flush()
 
         if save_handler is not None:
+            content_encoding = res.headers.get("Content-Encoding", "identity")
+            res_body_plain = self.decode_content_body(res_body, content_encoding)
             with self.lock:
                 save_handler(req, req_body, res, res_body_plain)
 
@@ -279,9 +270,7 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
     do_DELETE = do_GET
     do_OPTIONS = do_GET
 
-    def filter_headers(
-        self, headers: http.client.HTTPMessage
-    ) -> http.client.HTTPMessage:
+    def filter_headers(self, headers: HTTPMessage) -> HTTPMessage:
         # http://tools.ietf.org/html/rfc2616#section-13.5.1
         hop_by_hop = (
             "connection",
@@ -359,8 +348,9 @@ def print_info(req, req_body, res, res_body):
         req.request_version,
         req.headers,
     )
+    version_table = {10: "HTTP/1.0", 11: "HTTP/1.1"}
     res_header_text = "%s %d %s\n%s" % (
-        res.response_version,
+        version_table[res.version],
         res.status,
         res.reason,
         res.headers,
@@ -450,15 +440,15 @@ def print_info(req, req_body, res, res_body):
 
 
 def main():
-    """place holder, no use."""
+    """place holder, no action, but do not delete."""
 
 
 HandlerClass = ProxyRequestHandler
 ServerClass = ThreadingHTTPServer
 protocol = "HTTP/1.1"
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument( "-H", "--host", default="localhost", help="Host to bind")
-parser.add_argument( "-p", "--port", type=int, default="6666", help="Port to bind")
+parser.add_argument("-H", "--host", default="localhost", help="Host to bind")
+parser.add_argument("-p", "--port", type=int, default=7777, help="Port to bind")
 parser.add_argument("--timeout", type=int, default=5, help="Timeout")
 parser.add_argument("--ca-key", default="./ca-key.pem", help="CA key file")
 parser.add_argument("--ca-cert", default="./ca-cert.pem", help="CA cert file")
@@ -468,7 +458,7 @@ parser.add_argument(
 parser.add_argument("--cert-dir", default="./certs", help="Site certs files")
 parser.add_argument("--request-handler", help="Request handler function")
 parser.add_argument("--response-handler", help="Response handler function")
-parser.add_argument("--save-handler", help="Save handler function")
+parser.add_argument("--save-handler", help="Save handler function, use 'off' to turn off")
 parser.add_argument(
     "--make-certs", action="store_true", help="Create https intercept certs"
 )
@@ -513,9 +503,12 @@ if args.response_handler:
 else:
     response_handler = None
 if args.save_handler:
-    module, func = args.save_handler.split(":")
-    m = importlib.import_module(module)
-    save_handler = getattr(m, func)
+    if args.save_handler == "off":
+        save_handler = None
+    else:
+        module, func = args.save_handler.split(":")
+        m = importlib.import_module(module)
+        save_handler = getattr(m, func)
 else:
     save_handler = print_info
 
