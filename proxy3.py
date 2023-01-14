@@ -1,4 +1,5 @@
 import argparse
+import base64
 import glob
 import gzip
 import http.client
@@ -62,11 +63,28 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         self.log_message(format, *args)
 
     def do_CONNECT(self):
+        host, _ = self.path.split(":", 1)
+        # if args.userpass:
+        #     auth = self.headers.get("Proxy-Authorization")
+        #     print("Proxy-Authorization: ", dict(self.headers.items()))
+        #     if not auth:
+        #         print("Client does not provide userpass as '%s'" % args.userpass)
+        #         self.send_header("Proxy-Authenticate", 'Basic realm="%s"' % host)
+        #         self.send_error(407)
+        #         return
+        #     client_userpass = base64.b64decode(auth[6:])
+        #     if args.userpass != client_userpass:
+        #         print("Client userpass '%s' != '%s'" % (client_userpass, args.userpass))
+        #         self.send_error(403)
+        #         return
+
+        # print("args.domain", args.domain, "host", host, "equal", args.domain == host)
         if (
             os.path.isfile(args.ca_key)
             and os.path.isfile(args.ca_cert)
             and os.path.isfile(args.cert_key)
             and os.path.isdir(args.cert_dir)
+            and (args.domain == "*" or args.domain == host)
         ):
             print("HTTPS mitm enabled, Intercepting...")
             self.connect_intercept()
@@ -87,7 +105,10 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
                 else:
                     category = "DNS"
                 with open(confpath, "w") as f:
-                    f.write("subjectAltName=%s:%s\nextendedKeyUsage=serverAuth\n" %(category, hostname))
+                    f.write(
+                        "subjectAltName=%s:%s\nextendedKeyUsage=serverAuth\n"
+                        % (category, hostname)
+                    )
                 epoch = "%d" % (time.time() * 1000)
                 # CSR
                 p1 = Popen(
@@ -467,6 +488,17 @@ def main():
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("-b", "--bind", default="localhost", help="Host to bind")
 parser.add_argument("-p", "--port", type=int, default=7777, help="Port to bind")
+parser.add_argument(
+    "-d",
+    "--domain",
+    default="*",
+    help="Domain to intercept, if not set, intercept all.",
+)
+parser.add_argument(
+    "-u",
+    "--userpass",
+    help="Username and password for proxy authentication, format: 'user:pass'",
+)
 parser.add_argument("--timeout", type=int, default=5, help="Timeout")
 parser.add_argument("--ca-key", default="./ca-key.pem", help="CA key file")
 parser.add_argument("--ca-cert", default="./ca-cert.pem", help="CA cert file")

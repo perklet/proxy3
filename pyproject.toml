@@ -1,6 +1,6 @@
 [project]
 name = "proxy3"
-version = "0.2.0"
+version = "0.2.1"
 authors = [{ name = "Yifei Kong", email = "kong@yifei.me" }]
 description = "Proxy3 - Man-in-the-middle http/https proxy in a single python script"
 license = { file = "LICENSE" }
