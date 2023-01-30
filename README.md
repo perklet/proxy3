@@ -74,6 +74,9 @@ Through the proxy, you can access http://proxy3.test/ and install the CA certifi
 
 ## Customization
 
+`proxy3` can be customized by providing handler functions via commandline options. It's
+not possible to use `proxy3` as a python library for now, but PRs are welcomed.
+
 You can easily customize the proxy and modify the requests/responses or save something to the files.
 The ProxyRequestHandler class has 3 methods to customize:
 
@@ -82,3 +85,8 @@ The ProxyRequestHandler class has 3 methods to customize:
 * save_handler: called after responding to the client with the exclusive lock, so you can safely write out to the terminal or the file system
 
 By default, only save_handler is implemented which outputs HTTP(S) headers and some useful data to the standard output.
+
+## TODO
+
+[ ] check `openssl` availability when starting
+[ ] use `faketime` with `openssl` to ensure the certs date range are valid.
